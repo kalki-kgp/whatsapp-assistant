@@ -6,6 +6,7 @@ from typing import Optional
 import httpx
 
 from app.config import BRIDGE_URL
+from app import scheduler
 from app.db import (
     get_chat_db,
     get_contacts_db,
@@ -302,6 +303,118 @@ TOOL_DEFINITIONS = [
                     },
                 },
                 "required": ["recipient_jid", "recipient_name", "message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_incoming_messages",
+            "description": (
+                "Get recent incoming WhatsApp messages received via the live bridge connection. "
+                "These are real-time messages, not from the local database. "
+                "Useful for checking what just came in or alerting the user about new messages."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "since_minutes": {
+                        "type": "integer",
+                        "description": "Get messages from the last N minutes (default 5, max 60)",
+                        "default": 5,
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_unread_summary",
+            "description": (
+                "Get a summary of all chats with unread messages, including preview of recent messages. "
+                "Great for 'catch me up' or 'what did I miss' requests. Returns unread chats with "
+                "message previews so you can give the user a comprehensive summary."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_chats": {
+                        "type": "integer",
+                        "description": "Maximum number of unread chats to include (default 10)",
+                        "default": 10,
+                    },
+                    "messages_per_chat": {
+                        "type": "integer",
+                        "description": "Number of recent messages to include per chat (default 5)",
+                        "default": 5,
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "schedule_message",
+            "description": (
+                "Schedule a WhatsApp message to be sent at a future time. "
+                "IMPORTANT: Same rules as send_message — you MUST show the user a draft and get confirmation first. "
+                "The recipient_jid and recipient_name MUST come from search_contacts. "
+                "The send_at time must be in ISO 8601 format (UTC)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipient_jid": {
+                        "type": "string",
+                        "description": "The EXACT JID from search_contacts",
+                    },
+                    "recipient_name": {
+                        "type": "string",
+                        "description": "The contact name from search_contacts",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The text message to send",
+                    },
+                    "send_at": {
+                        "type": "string",
+                        "description": "When to send the message, in ISO 8601 UTC format (e.g., '2025-03-15T09:00:00+00:00')",
+                    },
+                },
+                "required": ["recipient_jid", "recipient_name", "message", "send_at"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_scheduled_messages",
+            "description": "List all pending scheduled messages that haven't been sent yet.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_scheduled_message",
+            "description": "Cancel a pending scheduled message by its ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message_id": {
+                        "type": "integer",
+                        "description": "The ID of the scheduled message to cancel (from list_scheduled_messages)",
+                    },
+                },
+                "required": ["message_id"],
             },
         },
     },
@@ -863,6 +976,122 @@ def send_message(recipient_jid: str, recipient_name: str, message: str) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
+def get_incoming_messages(since_minutes: int = 5) -> str:
+    """Get recent incoming messages from the live bridge."""
+    since_minutes = min(max(since_minutes, 1), 60)
+    import time
+    since_ts = int(time.time()) - (since_minutes * 60)
+    try:
+        resp = httpx.get(f"{BRIDGE_URL}/api/incoming", params={"since": since_ts}, timeout=5)
+        data = resp.json()
+        # Enrich with contact names
+        for msg in data.get("messages", []):
+            name = _jid_to_name(msg.get("senderJid")) or msg.get("pushName") or msg.get("senderJid")
+            msg["sender_name"] = name
+            chat_name = _jid_to_name(msg.get("chatJid")) or msg.get("chatJid")
+            msg["chat_name"] = chat_name
+        return json.dumps(data)
+    except httpx.ConnectError:
+        return json.dumps({"messages": [], "count": 0, "error": "Bridge not running"})
+    except Exception as e:
+        return json.dumps({"messages": [], "count": 0, "error": str(e)})
+
+
+def get_unread_summary(max_chats: int = 10, messages_per_chat: int = 5) -> str:
+    """Get a summary of all unread chats with recent message previews."""
+    max_chats = min(max_chats, 20)
+    messages_per_chat = min(messages_per_chat, 10)
+    conn = get_chat_db()
+
+    cursor = conn.execute(
+        """
+        SELECT c.Z_PK, c.ZCONTACTJID, c.ZPARTNERNAME, c.ZSESSIONTYPE, c.ZUNREADCOUNT
+        FROM ZWACHATSESSION c
+        WHERE c.ZREMOVED = 0
+          AND c.ZUNREADCOUNT > 0
+          AND c.ZSESSIONTYPE IN (0, 1)
+        ORDER BY c.ZUNREADCOUNT DESC
+        LIMIT ?
+        """,
+        (max_chats,),
+    )
+
+    chats = []
+    for row in cursor:
+        chat_pk = row["Z_PK"]
+        # Get last N messages for this chat
+        msg_cursor = conn.execute(
+            """
+            SELECT m.ZTEXT, m.ZISFROMME, m.ZMESSAGEDATE, m.ZMESSAGETYPE, m.ZPUSHNAME, m.ZFROMJID
+            FROM ZWAMESSAGE m
+            WHERE m.ZCHATSESSION = ?
+            ORDER BY m.ZMESSAGEDATE DESC
+            LIMIT ?
+            """,
+            (chat_pk, messages_per_chat),
+        )
+        messages = []
+        for m in msg_cursor:
+            msg_dt = apple_ts_to_datetime(m["ZMESSAGEDATE"])
+            msg_type = MESSAGE_TYPES.get(m["ZMESSAGETYPE"], f"type_{m['ZMESSAGETYPE']}")
+            text = m["ZTEXT"]
+            if not _is_readable_text(text):
+                text = f"[{msg_type}]"
+            sender = "You" if m["ZISFROMME"] else (m["ZPUSHNAME"] or _jid_to_name(m["ZFROMJID"]) or "them")
+            messages.append({
+                "sender": sender,
+                "text": text or f"[{msg_type}]",
+                "time": format_dt(msg_dt),
+                "type": msg_type,
+            })
+        messages.reverse()  # chronological order
+
+        chats.append({
+            "jid": row["ZCONTACTJID"],
+            "name": row["ZPARTNERNAME"],
+            "type": "group" if row["ZSESSIONTYPE"] == 1 else "dm",
+            "unread_count": row["ZUNREADCOUNT"],
+            "recent_messages": messages,
+        })
+
+    conn.close()
+
+    return json.dumps({
+        "unread_chats": chats,
+        "total_unread_chats": len(chats),
+        "total_unread_messages": sum(c["unread_count"] for c in chats),
+    })
+
+
+def schedule_message_tool(recipient_jid: str, recipient_name: str, message: str, send_at: str) -> str:
+    """Schedule a message for future delivery."""
+    # Same JID-name safety check as send_message
+    actual_name = _jid_to_name(recipient_jid)
+    if actual_name and recipient_name:
+        actual_lower = actual_name.lower().strip()
+        claimed_lower = recipient_name.lower().strip()
+        if actual_lower != claimed_lower and actual_lower not in claimed_lower and claimed_lower not in actual_lower:
+            return json.dumps({
+                "success": False,
+                "error": f"SAFETY BLOCK: JID {recipient_jid} belongs to '{actual_name}', not '{recipient_name}'.",
+            })
+
+    result = scheduler.schedule_message(recipient_jid, recipient_name, message, send_at)
+    return json.dumps(result)
+
+
+def list_scheduled_messages() -> str:
+    """List all pending scheduled messages."""
+    messages = scheduler.list_scheduled()
+    return json.dumps({"scheduled_messages": messages, "count": len(messages)})
+
+
+def cancel_scheduled_message(message_id: int) -> str:
+    """Cancel a pending scheduled message."""
+    result = scheduler.cancel_scheduled(message_id)
+    return json.dumps(result)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -957,6 +1186,11 @@ TOOL_MAP = {
     "get_chat_statistics": get_chat_statistics,
     "check_whatsapp_status": check_whatsapp_status,
     "send_message": send_message,
+    "get_incoming_messages": get_incoming_messages,
+    "get_unread_summary": get_unread_summary,
+    "schedule_message": schedule_message_tool,
+    "list_scheduled_messages": list_scheduled_messages,
+    "cancel_scheduled_message": cancel_scheduled_message,
 }
 
 

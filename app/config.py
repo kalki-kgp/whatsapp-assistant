@@ -26,3 +26,6 @@ SERVER_PORT = 3009
 
 # WhatsApp Bridge (Baileys sidecar)
 BRIDGE_URL = "http://localhost:3010"
+
+# Scheduled messages DB
+SCHEDULED_DB = Path("/tmp/whatsapp-assistant-db/scheduled.sqlite")

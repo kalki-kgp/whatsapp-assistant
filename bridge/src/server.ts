@@ -25,6 +25,21 @@ let connectionStatus: "disconnected" | "qr_pending" | "connected" = "disconnecte
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
+// --- Incoming message buffer ---
+interface IncomingMessage {
+  id: string;
+  chatJid: string;
+  senderJid: string;
+  pushName: string | null;
+  text: string | null;
+  messageType: string;
+  timestamp: number; // unix seconds
+  isGroup: boolean;
+}
+
+const incomingMessages: IncomingMessage[] = [];
+const MAX_INCOMING_BUFFER = 200;
+
 // --- Baileys connection ---
 async function connectToWhatsApp(): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -44,6 +59,71 @@ async function connectToWhatsApp(): Promise<void> {
   });
 
   sock.ev.on("creds.update", saveCreds);
+
+  // Listen for incoming messages
+  sock.ev.on("messages.upsert", ({ messages: msgs, type }) => {
+    if (type !== "notify") return; // only real-time messages, not history sync
+    for (const msg of msgs) {
+      if (!msg.message) continue;
+      if (msg.key.fromMe) continue; // skip our own messages
+
+      const chatJid = msg.key.remoteJid || "";
+      const isGroup = chatJid.endsWith("@g.us");
+      const senderJid = isGroup ? (msg.key.participant || "") : chatJid;
+
+      // Extract text content
+      let text: string | null = null;
+      let messageType = "unknown";
+      const m = msg.message;
+      if (m.conversation) {
+        text = m.conversation;
+        messageType = "text";
+      } else if (m.extendedTextMessage?.text) {
+        text = m.extendedTextMessage.text;
+        messageType = "text";
+      } else if (m.imageMessage) {
+        text = m.imageMessage.caption || null;
+        messageType = "image";
+      } else if (m.videoMessage) {
+        text = m.videoMessage.caption || null;
+        messageType = "video";
+      } else if (m.documentMessage) {
+        text = m.documentMessage.fileName || null;
+        messageType = "document";
+      } else if (m.audioMessage) {
+        messageType = m.audioMessage.ptt ? "voice_note" : "audio";
+      } else if (m.stickerMessage) {
+        messageType = "sticker";
+      } else if (m.contactMessage) {
+        text = m.contactMessage.displayName || null;
+        messageType = "contact";
+      } else if (m.locationMessage) {
+        messageType = "location";
+      }
+
+      const incoming: IncomingMessage = {
+        id: msg.key.id || "",
+        chatJid,
+        senderJid,
+        pushName: msg.pushName || null,
+        text,
+        messageType,
+        timestamp: typeof msg.messageTimestamp === "number"
+          ? msg.messageTimestamp
+          : Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
+        isGroup,
+      };
+
+      incomingMessages.push(incoming);
+      // Trim buffer
+      if (incomingMessages.length > MAX_INCOMING_BUFFER) {
+        incomingMessages.splice(0, incomingMessages.length - MAX_INCOMING_BUFFER);
+      }
+
+      const preview = text ? (text.length > 50 ? text.slice(0, 50) + "..." : text) : `[${messageType}]`;
+      console.log(`[bridge] Incoming from ${msg.pushName || senderJid}: ${preview}`);
+    }
+  });
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -114,6 +194,16 @@ app.get("/api/qr", (_req: Request, res: Response) => {
   }
 });
 
+app.get("/api/incoming", (req: Request, res: Response) => {
+  const since = parseInt(req.query.since as string, 10) || 0;
+  const filtered = incomingMessages.filter((m) => m.timestamp > since);
+  res.json({
+    messages: filtered,
+    count: filtered.length,
+    latest_timestamp: filtered.length > 0 ? filtered[filtered.length - 1].timestamp : since,
+  });
+});
+
 app.post("/api/send", async (req: Request, res: Response) => {
   const { recipient, message } = req.body;
 
@@ -130,7 +220,6 @@ app.post("/api/send", async (req: Request, res: Response) => {
   // Normalize recipient JID
   let jid = recipient;
   if (!jid.includes("@")) {
-    // Assume it's a phone number, add @s.whatsapp.net
     jid = jid.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
   }
 
