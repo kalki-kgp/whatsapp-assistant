@@ -43,6 +43,9 @@ echo "[run] Starting Python server on :3009..."
 python -m uvicorn app.main:app --host 0.0.0.0 --port 3009 --reload &
 PYTHON_PID=$!
 
+# Voice assistant (optional — run in separate terminal)
+# python voice/assistant.py
+
 # Wait for either process to exit
 wait $BRIDGE_PID $PYTHON_PID
 cleanup

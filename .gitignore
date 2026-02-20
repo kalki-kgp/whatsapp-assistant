@@ -8,3 +8,5 @@ references/
 bridge/node_modules/
 bridge/auth_info/
 bridge/dist/
+voice/apple_stt
+voice/__pycache__/

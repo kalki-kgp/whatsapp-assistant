@@ -1,5 +1,6 @@
 import json
 import logging
+import subprocess
 import uuid
 from datetime import datetime, timezone
 
@@ -12,6 +13,7 @@ from app.agent import chat, chat_sync
 from app.db import refresh_db
 from app.config import SERVER_PORT, BRIDGE_URL
 from app.scheduler import start_scheduler, list_scheduled
+from app.settings import get_settings, update_settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -156,6 +158,63 @@ async def api_scheduled():
 
 
 # ---------------------------------------------------------------------------
+# Settings endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings")
+async def api_get_settings():
+    """Return current settings."""
+    return get_settings()
+
+
+@app.put("/api/settings")
+async def api_put_settings(request: Request):
+    """Partial update of settings."""
+    body = await request.json()
+    updated = update_settings(body)
+    return updated
+
+
+@app.get("/api/tts-voices")
+async def api_tts_voices():
+    """Return list of available macOS TTS voices via `say -v ?`."""
+    try:
+        result = subprocess.run(
+            ["say", "-v", "?"], capture_output=True, text=True, timeout=5
+        )
+        voices = []
+        for line in result.stdout.strip().splitlines():
+            # Format: "Name       lang_REGION  # Sample text"
+            parts = line.split("#", 1)
+            name_lang = parts[0].strip()
+            tokens = name_lang.split()
+            if len(tokens) >= 2:
+                lang = tokens[-1]
+                name = " ".join(tokens[:-1])
+                voices.append({"name": name, "lang": lang})
+        return {"voices": voices}
+    except Exception:
+        return {"voices": []}
+
+
+@app.post("/api/tts-test")
+async def api_tts_test(request: Request):
+    """Play a TTS sample with the given voice and speed."""
+    body = await request.json()
+    voice = body.get("voice", "Samantha")
+    speed = body.get("speed", 190)
+    text = body.get("text", f"Hi, I'm {voice}. How can I help you today?")
+    try:
+        subprocess.Popen(
+            ["say", "-v", voice, "-r", str(speed), text],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Inline HTML page — single-file chat UI
 # ---------------------------------------------------------------------------
 HTML_PAGE = r"""<!DOCTYPE html>
@@ -270,6 +329,82 @@ HTML_PAGE = r"""<!DOCTYPE html>
   }
   .hbtn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
   .hbtn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* ===== SETTINGS MODAL ===== */
+  .settings-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:100; align-items:center; justify-content:center; }
+  .settings-overlay.active { display: flex; }
+  .settings-modal {
+    background: var(--bg-panel); border-radius: 16px;
+    padding: 28px 32px; max-width: 480px; width: 90%;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+    border: 1px solid var(--border); max-height: 85vh; overflow-y: auto;
+  }
+  .settings-modal h3 {
+    font-size: 18px; font-weight: 600; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .settings-modal h3 svg { width: 20px; height: 20px; fill: var(--accent); }
+  .s-group { margin-bottom: 18px; }
+  .s-group label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--text-2); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .s-group input[type="text"], .s-group select {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; color: var(--text);
+    font-size: 14px; font-family: 'DM Sans', sans-serif; outline: none;
+    transition: border-color 0.2s;
+  }
+  .s-group input[type="text"]:focus, .s-group select:focus { border-color: rgba(0,200,150,0.4); }
+  .s-group select { appearance: none; cursor: pointer; }
+  .s-range-row { display: flex; align-items: center; gap: 12px; }
+  .s-range-row input[type="range"] {
+    flex: 1; accent-color: var(--accent); height: 6px; cursor: pointer;
+  }
+  .s-range-val {
+    min-width: 48px; text-align: center; font-size: 13px;
+    font-weight: 600; color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .s-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0;
+  }
+  .s-toggle-row span { font-size: 14px; }
+  .s-toggle {
+    width: 44px; height: 24px; background: var(--bg-input);
+    border-radius: 12px; border: 1px solid var(--border);
+    position: relative; cursor: pointer; transition: all 0.2s;
+  }
+  .s-toggle.on { background: var(--accent); border-color: var(--accent); }
+  .s-toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 18px; height: 18px; background: #fff; border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .s-toggle.on::after { transform: translateX(20px); }
+  .s-voice-row { display: flex; gap: 8px; align-items: stretch; }
+  .s-voice-row select { flex: 1; }
+  .s-test-btn {
+    background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--accent); border-radius: 8px; padding: 0 14px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+    white-space: nowrap; display: flex; align-items: center; gap: 5px;
+  }
+  .s-test-btn:hover { background: var(--accent); color: var(--bg-deep); }
+  .s-test-btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .s-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .s-actions button {
+    padding: 10px 24px; border-radius: 24px; font-size: 13px;
+    font-weight: 500; font-family: 'DM Sans', sans-serif;
+    cursor: pointer; transition: all 0.2s; border: none;
+  }
+  .s-btn-cancel { background: var(--bg-input); color: var(--text); border: 1px solid var(--border) !important; }
+  .s-btn-cancel:hover { background: var(--bg-header); }
+  .s-btn-save { background: var(--accent); color: var(--bg-deep); font-weight: 600; }
+  .s-btn-save:hover { background: #00e6aa; }
 
   /* ===== MESSAGES AREA ===== */
   .messages-wrapper { flex: 1; overflow: hidden; position: relative; background: var(--bg-deep); }
@@ -557,6 +692,9 @@ HTML_PAGE = r"""<!DOCTYPE html>
       <button class="active" data-view="user" onclick="setView('user')">Chat</button>
       <button data-view="dev" onclick="setView('dev')">Dev</button>
     </div>
+    <button class="hbtn" onclick="openSettings()" title="Voice settings">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
+    </button>
     <button class="hbtn" onclick="fetch('/api/refresh',{method:'POST'})" title="Refresh data">
       <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
     </button>
@@ -608,6 +746,67 @@ HTML_PAGE = r"""<!DOCTYPE html>
     <p>Scan with your phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device</p>
     <div class="qr-box" id="qr-box"><span class="qr-msg">Loading...</span></div>
     <br><button class="modal-btn" onclick="closeQR()">Close</button>
+  </div>
+</div>
+
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettings(event)">
+  <div class="settings-modal" onclick="event.stopPropagation()">
+    <h3>
+      <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 00-1 1v.28c-1.18.28-2.24.84-3.1 1.62l-.24-.14a1 1 0 00-1.37.37l-1 1.73a1 1 0 00.37 1.37l.24.14A7.06 7.06 0 005.5 10H5a1 1 0 00-1 1v2a1 1 0 001 1h.5c.1.7.3 1.37.6 1.99l-.25.14a1 1 0 00-.36 1.37l1 1.73a1 1 0 001.37.36l.24-.14c.86.78 1.92 1.34 3.1 1.62V21a1 1 0 001 1h2a1 1 0 001-1v-.28c1.18-.28 2.24-.84 3.1-1.62l.24.14a1 1 0 001.37-.36l1-1.73a1 1 0 00-.37-1.37l-.24-.14c.3-.62.5-1.29.6-1.99h.5a1 1 0 001-1v-2a1 1 0 00-1-1h-.5a7.06 7.06 0 00-.6-1.99l.25-.14a1 1 0 00.36-1.37l-1-1.73a1 1 0 00-1.37-.36l-.24.14A6.94 6.94 0 0013 4.28V4a1 1 0 00-1-1zm0 6a3 3 0 110 6 3 3 0 010-6z"/></svg>
+      Voice Settings
+    </h3>
+    <div class="s-group">
+      <label>Wake Word</label>
+      <input type="text" id="s-wake-word" placeholder="hey tanu">
+    </div>
+    <div class="s-group">
+      <label>STT Engine</label>
+      <select id="s-stt-engine">
+        <option value="google">Google Web Speech</option>
+        <option value="apple">Apple On-Device</option>
+        <option value="whisper">Whisper (Local)</option>
+      </select>
+    </div>
+    <div class="s-group">
+      <label>TTS Voice</label>
+      <div class="s-voice-row">
+        <select id="s-tts-voice"><option value="Samantha">Samantha</option></select>
+        <button class="s-test-btn" onclick="testTTS()" title="Test selected voice">
+          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.5v7a4.47 4.47 0 002.5-3.5zM14 3.23v2.06a6.51 6.51 0 010 13.42v2.06A8.5 8.5 0 0014 3.23z"/></svg>
+          Test
+        </button>
+      </div>
+    </div>
+    <div class="s-group">
+      <label>TTS Speed</label>
+      <div class="s-range-row">
+        <input type="range" id="s-tts-speed" min="100" max="300" step="10" value="190">
+        <span class="s-range-val" id="s-speed-val">190</span>
+      </div>
+    </div>
+    <div class="s-group">
+      <label>Follow-up Timeout</label>
+      <div class="s-range-row">
+        <input type="range" id="s-follow-up" min="1" max="10" step="1" value="3">
+        <span class="s-range-val" id="s-follow-val">3s</span>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-toggle-row">
+        <span>Auto Listen</span>
+        <div class="s-toggle on" id="s-auto-listen" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+    <div class="s-group">
+      <div class="s-toggle-row">
+        <span>Sound Feedback</span>
+        <div class="s-toggle on" id="s-sound-feedback" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+    <div class="s-actions">
+      <button class="s-btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="s-btn-save" onclick="saveSettings()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -790,6 +989,78 @@ function showToast(sender, text, ts){
 }
 
 setInterval(pollIncoming, 5000);
+
+// ===== SETTINGS =====
+const sSpeed = document.getElementById('s-tts-speed');
+const sSpeedVal = document.getElementById('s-speed-val');
+const sFollowUp = document.getElementById('s-follow-up');
+const sFollowVal = document.getElementById('s-follow-val');
+sSpeed.addEventListener('input', () => { sSpeedVal.textContent = sSpeed.value; });
+sFollowUp.addEventListener('input', () => { sFollowVal.textContent = sFollowUp.value + 's'; });
+
+async function openSettings(){
+  document.getElementById('settings-overlay').classList.add('active');
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    document.getElementById('s-wake-word').value = s.wake_word || 'hey tanu';
+    document.getElementById('s-stt-engine').value = s.stt_engine || 'google';
+    sSpeed.value = s.tts_speed || 190;
+    sSpeedVal.textContent = sSpeed.value;
+    sFollowUp.value = s.follow_up_timeout || 3;
+    sFollowVal.textContent = sFollowUp.value + 's';
+    const al = document.getElementById('s-auto-listen');
+    al.classList.toggle('on', s.auto_listen !== false);
+    const sf = document.getElementById('s-sound-feedback');
+    sf.classList.toggle('on', s.sound_feedback !== false);
+    // Load TTS voices
+    const vr = await fetch('/api/tts-voices');
+    const vd = await vr.json();
+    const sel = document.getElementById('s-tts-voice');
+    if (vd.voices && vd.voices.length > 0) {
+      sel.innerHTML = '';
+      for (const v of vd.voices) {
+        const o = document.createElement('option');
+        o.value = v.name;
+        o.textContent = `${v.name} (${v.lang})`;
+        sel.appendChild(o);
+      }
+    }
+    sel.value = s.tts_voice || 'Samantha';
+  } catch(e) { console.error('Failed to load settings', e); }
+}
+
+function closeSettings(e){
+  if(e && e.target !== document.getElementById('settings-overlay')) return;
+  document.getElementById('settings-overlay').classList.remove('active');
+}
+
+async function testTTS(){
+  const voice = document.getElementById('s-tts-voice').value;
+  const speed = parseInt(sSpeed.value);
+  try {
+    await fetch('/api/tts-test', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({voice, speed})
+    });
+  } catch(e) { console.error('TTS test failed', e); }
+}
+
+async function saveSettings(){
+  const data = {
+    wake_word: document.getElementById('s-wake-word').value.trim() || 'hey tanu',
+    stt_engine: document.getElementById('s-stt-engine').value,
+    tts_voice: document.getElementById('s-tts-voice').value,
+    tts_speed: parseInt(sSpeed.value),
+    follow_up_timeout: parseInt(sFollowUp.value),
+    auto_listen: document.getElementById('s-auto-listen').classList.contains('on'),
+    sound_feedback: document.getElementById('s-sound-feedback').classList.contains('on'),
+  };
+  try {
+    await fetch('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    document.getElementById('settings-overlay').classList.remove('active');
+  } catch(e) { console.error('Failed to save settings', e); }
+}
 </script>
 </body>
 </html>"""
