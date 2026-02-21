@@ -201,15 +201,18 @@ ln -sf "$ENV_FILE" "$APP_DIR/.env"
 log "Installing 'tanu' command..."
 chmod +x "$APP_DIR/launcher/tanu"
 
-if [ -d "/usr/local/bin" ] || mkdir -p /usr/local/bin 2>/dev/null; then
-    ln -sf "$APP_DIR/launcher/tanu" "$BIN_LINK"
+if ln -sf "$APP_DIR/launcher/tanu" "$BIN_LINK" 2>/dev/null; then
     ok "Installed: tanu → $BIN_LINK"
+elif sudo ln -sf "$APP_DIR/launcher/tanu" "$BIN_LINK" 2>/dev/null; then
+    ok "Installed: tanu → $BIN_LINK (via sudo)"
 else
     # Fallback: use ~/.local/bin
     mkdir -p "$HOME/.local/bin"
     ln -sf "$APP_DIR/launcher/tanu" "$HOME/.local/bin/tanu"
     ok "Installed: tanu → ~/.local/bin/tanu"
-    warn "Add ~/.local/bin to your PATH if not already there."
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        warn "Add this to your shell profile:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
 fi
 
 # --- Mic permission prompt ---
