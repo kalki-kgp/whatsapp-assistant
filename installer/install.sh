@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tanu — WhatsApp Assistant Installer for macOS
+# WhatsApp Assistant — Installer for macOS
 #
 # Usage:
 #   bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-assistant/main/installer/install.sh)
@@ -9,13 +9,13 @@
 
 set -euo pipefail
 
-TANU_HOME="$HOME/.tanu"
-APP_DIR="$TANU_HOME/app"
-VENV_DIR="$TANU_HOME/venv"
-LOG_DIR="$TANU_HOME/logs"
-RUN_DIR="$TANU_HOME/run"
+WA_HOME="$HOME/.wa"
+APP_DIR="$WA_HOME/app"
+VENV_DIR="$WA_HOME/venv"
+LOG_DIR="$WA_HOME/logs"
+RUN_DIR="$WA_HOME/run"
 REPO_URL="https://github.com/kalki-kgp/whatsapp-assistant.git"
-BIN_LINK="/usr/local/bin/tanu"
+BIN_LINK="/usr/local/bin/wa"
 
 # Colors
 RED='\033[0;31m'
@@ -26,7 +26,7 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-log()  { echo -e "${BLUE}[tanu]${NC} $*"; }
+log()  { echo -e "${BLUE}[wa]${NC} $*"; }
 ok()   { echo -e "${GREEN}  ✓${NC} $*"; }
 warn() { echo -e "${YELLOW}  !${NC} $*"; }
 err()  { echo -e "${RED}  ✗${NC} $*" >&2; }
@@ -36,8 +36,8 @@ step() { echo -e "\n${BOLD}$*${NC}"; }
 
 echo ""
 echo -e "${BOLD}╭─────────────────────────────────────╮${NC}"
-echo -e "${BOLD}│      Tanu — WhatsApp Assistant       │${NC}"
-echo -e "${BOLD}│           macOS Installer            │${NC}"
+echo -e "${BOLD}│     WhatsApp Assistant Installer      │${NC}"
+echo -e "${BOLD}│              macOS only               │${NC}"
 echo -e "${BOLD}╰─────────────────────────────────────╯${NC}"
 echo ""
 
@@ -102,10 +102,10 @@ done
 
 # --- directory structure ---
 
-step "5/9  Setting up ~/.tanu/..."
+step "5/9  Setting up ~/.wa/..."
 
-mkdir -p "$TANU_HOME" "$LOG_DIR" "$RUN_DIR"
-ok "Created $TANU_HOME"
+mkdir -p "$WA_HOME" "$LOG_DIR" "$RUN_DIR"
+ok "Created $WA_HOME"
 
 # --- clone or update repo ---
 
@@ -126,7 +126,7 @@ else
 fi
 
 cd "$APP_DIR"
-git rev-parse --short HEAD > "$TANU_HOME/version"
+git rev-parse --short HEAD > "$WA_HOME/version"
 
 # --- Python venv + deps ---
 
@@ -171,7 +171,7 @@ fi
 
 step "9/9  Configuration..."
 
-ENV_FILE="$TANU_HOME/.env"
+ENV_FILE="$WA_HOME/.env"
 
 if [ -n "${NEBIUS_API_KEY:-}" ]; then
     echo "NEBIUS_API_KEY=$NEBIUS_API_KEY" > "$ENV_FILE"
@@ -198,18 +198,18 @@ ln -sf "$ENV_FILE" "$APP_DIR/.env"
 
 # --- Symlink CLI ---
 
-log "Installing 'tanu' command..."
-chmod +x "$APP_DIR/launcher/tanu"
+log "Installing 'wa' command..."
+chmod +x "$APP_DIR/launcher/wa"
 
-if ln -sf "$APP_DIR/launcher/tanu" "$BIN_LINK" 2>/dev/null; then
-    ok "Installed: tanu → $BIN_LINK"
-elif sudo ln -sf "$APP_DIR/launcher/tanu" "$BIN_LINK" 2>/dev/null; then
-    ok "Installed: tanu → $BIN_LINK (via sudo)"
+if ln -sf "$APP_DIR/launcher/wa" "$BIN_LINK" 2>/dev/null; then
+    ok "Installed: wa → $BIN_LINK"
+elif sudo ln -sf "$APP_DIR/launcher/wa" "$BIN_LINK" 2>/dev/null; then
+    ok "Installed: wa → $BIN_LINK (via sudo)"
 else
     # Fallback: use ~/.local/bin
     mkdir -p "$HOME/.local/bin"
-    ln -sf "$APP_DIR/launcher/tanu" "$HOME/.local/bin/tanu"
-    ok "Installed: tanu → ~/.local/bin/tanu"
+    ln -sf "$APP_DIR/launcher/wa" "$HOME/.local/bin/wa"
+    ok "Installed: wa → ~/.local/bin/wa"
     if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
         warn "Add this to your shell profile:  export PATH=\"\$HOME/.local/bin:\$PATH\""
     fi
@@ -242,12 +242,12 @@ echo -e "${BOLD}╰────────────────────�
 echo ""
 echo -e "  ${BOLD}Get started:${NC}"
 echo ""
-echo -e "    ${GREEN}tanu${NC}            Start Tanu (opens browser)"
-echo -e "    ${GREEN}tanu status${NC}     Check what's running"
-echo -e "    ${GREEN}tanu voice${NC}      Start voice assistant"
-echo -e "    ${GREEN}tanu menubar${NC}    Launch menu bar icon"
-echo -e "    ${GREEN}tanu help${NC}       See all commands"
+echo -e "    ${GREEN}wa${NC}              Start (opens browser)"
+echo -e "    ${GREEN}wa status${NC}       Check what's running"
+echo -e "    ${GREEN}wa voice${NC}        Start voice assistant"
+echo -e "    ${GREEN}wa menubar${NC}      Launch menu bar icon"
+echo -e "    ${GREEN}wa help${NC}         See all commands"
 echo ""
-echo -e "  ${DIM}Installed to: $TANU_HOME${NC}"
-echo -e "  ${DIM}Version: $(cat "$TANU_HOME/version")${NC}"
+echo -e "  ${DIM}Installed to: $WA_HOME${NC}"
+echo -e "  ${DIM}Version: $(cat "$WA_HOME/version")${NC}"
 echo ""

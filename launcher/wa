@@ -1,6 +1,6 @@
 #!/bin/bash
-# tanu — CLI launcher for the WhatsApp Assistant
-# Usage: tanu [command]
+# wa — CLI launcher for the WhatsApp Assistant
+# Usage: wa [command]
 #
 # Commands:
 #   (none) / start   Start server + bridge, open browser
@@ -16,12 +16,12 @@
 
 set -euo pipefail
 
-TANU_HOME="${TANU_HOME:-$HOME/.tanu}"
-APP_DIR="$TANU_HOME/app"
-VENV_DIR="$TANU_HOME/venv"
-LOG_DIR="$TANU_HOME/logs"
-RUN_DIR="$TANU_HOME/run"
-ENV_FILE="$TANU_HOME/.env"
+WA_HOME="${WA_HOME:-$HOME/.wa}"
+APP_DIR="$WA_HOME/app"
+VENV_DIR="$WA_HOME/venv"
+LOG_DIR="$WA_HOME/logs"
+RUN_DIR="$WA_HOME/run"
+ENV_FILE="$WA_HOME/.env"
 
 SERVER_PORT=3009
 BRIDGE_PORT=3010
@@ -35,10 +35,10 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-log()  { echo -e "${BLUE}[tanu]${NC} $*"; }
-ok()   { echo -e "${GREEN}[tanu]${NC} $*"; }
-warn() { echo -e "${YELLOW}[tanu]${NC} $*"; }
-err()  { echo -e "${RED}[tanu]${NC} $*" >&2; }
+log()  { echo -e "${BLUE}[wa]${NC} $*"; }
+ok()   { echo -e "${GREEN}[wa]${NC} $*"; }
+warn() { echo -e "${YELLOW}[wa]${NC} $*"; }
+err()  { echo -e "${RED}[wa]${NC} $*" >&2; }
 
 # --- helpers ---
 
@@ -109,7 +109,7 @@ cmd_start() {
 
     # Check if already running
     if is_running server && is_running bridge; then
-        ok "Tanu is already running."
+        ok "WhatsApp Assistant is already running."
         echo "  Server PID: $(get_pid server)"
         echo "  Bridge PID: $(get_pid bridge)"
         echo "  Open: http://$SERVER_HOST:$SERVER_PORT"
@@ -137,7 +137,7 @@ cmd_start() {
         cd - > /dev/null
 
         if ! wait_for_port $BRIDGE_PORT 10; then
-            warn "Bridge may not have started. Check: tanu logs bridge"
+            warn "Bridge may not have started. Check: wa logs bridge"
         else
             ok "Bridge started (PID $(get_pid bridge))"
         fi
@@ -156,7 +156,7 @@ cmd_start() {
         cd - > /dev/null
 
         if ! wait_for_port $SERVER_PORT 10; then
-            warn "Server may not have started. Check: tanu logs server"
+            warn "Server may not have started. Check: wa logs server"
         else
             ok "Server started (PID $(get_pid server))"
         fi
@@ -165,7 +165,7 @@ cmd_start() {
     fi
 
     echo ""
-    ok "Tanu is running!"
+    ok "WhatsApp Assistant is running!"
     echo "  Open: http://$SERVER_HOST:$SERVER_PORT"
     echo ""
 
@@ -211,8 +211,8 @@ cmd_restart() {
 }
 
 cmd_status() {
-    echo -e "${BOLD}Tanu Status${NC}"
-    echo "──────────────────────"
+    echo -e "${BOLD}WhatsApp Assistant Status${NC}"
+    echo "──────────────────────────────"
 
     for svc in server bridge voice; do
         if is_running "$svc"; then
@@ -271,18 +271,18 @@ cmd_voice() {
     ensure_env
 
     if ! is_running server; then
-        err "Server is not running. Start it first with: tanu start"
+        err "Server is not running. Start it first with: wa start"
         exit 1
     fi
 
     if is_running voice; then
         warn "Voice assistant is already running (PID $(get_pid voice))."
-        warn "Stop it first with: tanu voice stop"
+        warn "Stop it first with: wa voice stop"
         exit 1
     fi
 
     log "Starting voice assistant..."
-    log "Say '${BOLD}hey tanu${NC}' followed by your command."
+    log "Say your wake word followed by a command."
     log "Press Ctrl+C to stop."
     echo ""
 
@@ -302,7 +302,7 @@ cmd_menubar() {
     ensure_env
     log "Starting menu bar controller..."
     cd "$APP_DIR"
-    "$VENV_DIR/bin/python" launcher/tanu-menubar.py &
+    "$VENV_DIR/bin/python" launcher/wa-menubar.py &
     disown
     ok "Menu bar controller launched."
 }
@@ -388,11 +388,11 @@ cmd_update() {
     fi
 
     # Save version
-    git rev-parse --short HEAD > "$TANU_HOME/version"
+    git rev-parse --short HEAD > "$WA_HOME/version"
 
-    ok "Updated to $(cat "$TANU_HOME/version")!"
+    ok "Updated to $(cat "$WA_HOME/version")!"
     if [ "$was_running" = true ]; then
-        echo "  Run '${BOLD}tanu start${NC}' to restart."
+        echo "  Run '${BOLD}wa start${NC}' to restart."
     fi
 }
 
@@ -400,14 +400,14 @@ cmd_uninstall() {
     if [ -f "$APP_DIR/installer/uninstall.sh" ]; then
         bash "$APP_DIR/installer/uninstall.sh"
     else
-        err "Uninstaller not found. Remove ~/.tanu manually."
+        err "Uninstaller not found. Remove ~/.wa manually."
     fi
 }
 
 cmd_help() {
-    echo -e "${BOLD}tanu${NC} — WhatsApp Assistant"
+    echo -e "${BOLD}wa${NC} — WhatsApp Assistant"
     echo ""
-    echo "Usage: tanu [command]"
+    echo "Usage: wa [command]"
     echo ""
     echo "Commands:"
     echo "  start          Start server + bridge, open browser (default)"
@@ -419,7 +419,7 @@ cmd_help() {
     echo "  menubar        Launch menu bar controller"
     echo "  logs [svc]     Tail logs (server|bridge|voice|all)"
     echo "  update         Pull latest code + reinstall deps"
-    echo "  uninstall      Remove Tanu"
+    echo "  uninstall      Remove WhatsApp Assistant"
     echo "  help           Show this help"
 }
 

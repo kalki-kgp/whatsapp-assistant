@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Tanu — macOS Menu Bar Controller
+WhatsApp Assistant — macOS Menu Bar Controller
 
 Provides a menu bar icon with status and controls for the WhatsApp Assistant.
 Requires: pip install rumps
 
-Launch via: tanu menubar
+Launch via: wa menubar
 """
 
 import json
@@ -18,14 +18,14 @@ import rumps
 
 SERVER_URL = "http://127.0.0.1:3009"
 BRIDGE_URL = "http://localhost:3010"
-TANU_HOME = os.path.expanduser("~/.tanu")
-PLIST_PATH = os.path.expanduser("~/Library/LaunchAgents/com.tanu.menubar.plist")
+WA_HOME = os.path.expanduser("~/.wa")
+PLIST_PATH = os.path.expanduser("~/Library/LaunchAgents/com.wa-assistant.menubar.plist")
 
 
-def run_tanu(*args):
-    """Run a tanu CLI command in background."""
+def run_wa(*args):
+    """Run a wa CLI command in background."""
     subprocess.Popen(
-        ["tanu", *args],
+        ["wa", *args],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -41,9 +41,9 @@ def fetch_json(url, timeout=2):
         return None
 
 
-class TanuMenuBar(rumps.App):
+class WAMenuBar(rumps.App):
     def __init__(self):
-        super().__init__("T", title="T", quit_button=None)
+        super().__init__("WA", title="WA", quit_button=None)
 
         self.status_item = rumps.MenuItem("Status: Checking...")
         self.whatsapp_item = rumps.MenuItem("WhatsApp: Checking...")
@@ -96,10 +96,10 @@ class TanuMenuBar(rumps.App):
         if health and health.get("status") == "ok":
             version = health.get("version", "?")
             self.status_item.title = f"Status: Running (v{version})"
-            self.title = "T"
+            self.title = "WA"
         else:
             self.status_item.title = "Status: Stopped"
-            self.title = "T"
+            self.title = "WA"
 
         bridge = fetch_json(f"{BRIDGE_URL}/api/status")
         if bridge:
@@ -114,43 +114,43 @@ class TanuMenuBar(rumps.App):
             self.whatsapp_item.title = "WhatsApp: Offline"
 
     def on_start(self, _):
-        run_tanu("start")
-        rumps.notification("Tanu", "", "Starting server...")
+        run_wa("start")
+        rumps.notification("WhatsApp Assistant", "", "Starting server...")
 
     def on_stop(self, _):
-        run_tanu("stop")
-        rumps.notification("Tanu", "", "Stopping server...")
+        run_wa("stop")
+        rumps.notification("WhatsApp Assistant", "", "Stopping server...")
 
     def on_restart(self, _):
-        run_tanu("restart")
-        rumps.notification("Tanu", "", "Restarting server...")
+        run_wa("restart")
+        rumps.notification("WhatsApp Assistant", "", "Restarting server...")
 
     def on_voice_start(self, _):
-        """Open Terminal.app with tanu voice for proper mic permissions."""
-        script = 'tell application "Terminal" to do script "tanu voice"'
+        """Open Terminal.app with wa voice for proper mic permissions."""
+        script = 'tell application "Terminal" to do script "wa voice"'
         subprocess.Popen(["osascript", "-e", script])
 
     def on_voice_stop(self, _):
-        run_tanu("voice", "stop")
+        run_wa("voice", "stop")
 
     def on_open_browser(self, _):
         subprocess.Popen(["open", f"{SERVER_URL}"])
 
     def on_open_logs(self, _):
-        log_dir = os.path.join(TANU_HOME, "logs")
+        log_dir = os.path.join(WA_HOME, "logs")
         subprocess.Popen(["open", log_dir])
 
     def on_check_updates(self, _):
-        rumps.notification("Tanu", "", "Checking for updates...")
+        rumps.notification("WhatsApp Assistant", "", "Checking for updates...")
         threading.Thread(target=self._do_update, daemon=True).start()
 
     def _do_update(self):
         result = subprocess.run(
-            ["tanu", "update"],
+            ["wa", "update"],
             capture_output=True, text=True
         )
         output = result.stdout.strip().split("\n")[-1] if result.stdout.strip() else "Update check complete."
-        rumps.notification("Tanu", "", output)
+        rumps.notification("WhatsApp Assistant", "", output)
 
     def on_toggle_login(self, sender):
         if sender.state:
@@ -168,10 +168,10 @@ class TanuMenuBar(rumps.App):
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.tanu.menubar</string>
+    <string>com.wa-assistant.menubar</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/tanu</string>
+        <string>/usr/local/bin/wa</string>
         <string>menubar</string>
     </array>
     <key>RunAtLoad</key>
@@ -190,4 +190,4 @@ class TanuMenuBar(rumps.App):
 
 
 if __name__ == "__main__":
-    TanuMenuBar().run()
+    WAMenuBar().run()

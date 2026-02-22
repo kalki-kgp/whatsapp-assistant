@@ -795,8 +795,12 @@ HTML_PAGE = r"""<!DOCTYPE html>
       Voice Settings
     </h3>
     <div class="s-group">
+      <label>Assistant Name</label>
+      <input type="text" id="s-assistant-name" placeholder="Assistant">
+    </div>
+    <div class="s-group">
       <label>Wake Word</label>
-      <input type="text" id="s-wake-word" placeholder="hey tanu">
+      <input type="text" id="s-wake-word" placeholder="hey assistant">
     </div>
     <div class="s-group">
       <label>STT Engine</label>
@@ -1042,7 +1046,8 @@ async function openSettings(){
   try {
     const r = await fetch('/api/settings');
     const s = await r.json();
-    document.getElementById('s-wake-word').value = s.wake_word || 'hey tanu';
+    document.getElementById('s-assistant-name').value = s.assistant_name || 'Assistant';
+    document.getElementById('s-wake-word').value = s.wake_word || 'hey assistant';
     document.getElementById('s-stt-engine').value = s.stt_engine || 'google';
     sSpeed.value = s.tts_speed || 190;
     sSpeedVal.textContent = sSpeed.value;
@@ -1087,7 +1092,8 @@ async function testTTS(){
 
 async function saveSettings(){
   const data = {
-    wake_word: document.getElementById('s-wake-word').value.trim() || 'hey tanu',
+    assistant_name: document.getElementById('s-assistant-name').value.trim() || 'Assistant',
+    wake_word: document.getElementById('s-wake-word').value.trim() || 'hey assistant',
     stt_engine: document.getElementById('s-stt-engine').value,
     tts_voice: document.getElementById('s-tts-voice').value,
     tts_speed: parseInt(sSpeed.value),

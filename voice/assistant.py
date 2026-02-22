@@ -3,7 +3,7 @@
 Voice assistant for WhatsApp Assistant.
 
 Run in a separate terminal alongside the main server (./run.sh).
-Say the wake word (default "hey tanu") followed by a command, and hear
+Say the wake word (default "hey assistant") followed by a command, and hear
 the assistant's spoken response via macOS TTS.
 
 Usage:
@@ -41,7 +41,7 @@ except ImportError:
 def fetch_settings(server: str) -> dict:
     """Load settings from the running server."""
     defaults = {
-        "wake_word": "hey tanu",
+        "wake_word": "hey assistant",
         "stt_engine": "google",
         "tts_voice": "Samantha",
         "tts_speed": 190,
@@ -243,7 +243,7 @@ def match_wake_word(transcript: str, wake_word: str) -> tuple[bool, str]:
     Fuzzy-match wake word at the start of transcript.
     Returns (matched, remaining_text).
 
-    Handles common STT misheards like "he" for "hey", "tan" for "tanu", etc.
+    Handles common STT misheards via per-word edit distance tolerance.
     Uses per-word edit distance tolerance:
       - words <= 3 chars: exact or distance 1
       - words > 3 chars: distance <= 1

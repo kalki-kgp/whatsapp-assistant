@@ -4,7 +4,8 @@ from pathlib import Path
 from app.config import SETTINGS_FILE
 
 DEFAULTS = {
-    "wake_word": "hey tanu",
+    "assistant_name": "Assistant",  # user-chosen name for the assistant
+    "wake_word": "hey assistant",
     "stt_engine": "google",       # "google" | "apple" | "whisper"
     "tts_voice": "Samantha",      # macOS voice name
     "tts_speed": 190,             # words per minute
