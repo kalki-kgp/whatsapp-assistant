@@ -11,7 +11,7 @@ CONTACTS_DB = WHATSAPP_DB_DIR / "ContactsV2.sqlite"
 LID_DB = WHATSAPP_DB_DIR / "LID.sqlite"
 
 # Temp directory for DB copies (avoid lock issues with running WhatsApp)
-TEMP_DB_DIR = Path("/tmp/whatsapp-assistant-db")
+TEMP_DB_DIR = Path("/tmp/whatsapp-mcp-db")
 
 # Apple Core Data epoch offset (2001-01-01 00:00:00 UTC)
 APPLE_EPOCH_OFFSET = 978307200
@@ -28,10 +28,10 @@ SERVER_PORT = 3009
 BRIDGE_URL = "http://localhost:3010"
 
 # Scheduled messages DB
-SCHEDULED_DB = Path("/tmp/whatsapp-assistant-db/scheduled.sqlite")
+SCHEDULED_DB = Path("/tmp/whatsapp-mcp-db/scheduled.sqlite")
 
 # Settings file
-SETTINGS_FILE = Path("/tmp/whatsapp-assistant-db/settings.json")
+SETTINGS_FILE = Path("/tmp/whatsapp-mcp-db/settings.json")
 
 # Conversations DB (chat history persistence)
-CONVERSATIONS_DB = Path("/tmp/whatsapp-assistant-db/conversations.sqlite")
+CONVERSATIONS_DB = Path("/tmp/whatsapp-mcp-db/conversations.sqlite")

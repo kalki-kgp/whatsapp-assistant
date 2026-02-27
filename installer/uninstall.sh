@@ -31,7 +31,7 @@ rm -rf "$HOME/.wa"
 echo -e "${GREEN}  ✓${NC} Removed ~/.wa"
 
 # Remove temp database directory
-rm -rf /tmp/whatsapp-assistant-db
+rm -rf /tmp/whatsapp-mcp-db
 echo -e "${GREEN}  ✓${NC} Removed temp files"
 
 echo ""

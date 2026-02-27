@@ -12,4 +12,4 @@ This is a WhatsApp MCP (Model Context Protocol) assistant with two core services
 - The bridge will show a QR code on startup for WhatsApp Web authentication. Without scanning, bridge status is `qr_pending` — the server still works for conversation management and LLM chat, just not for sending/receiving WhatsApp messages.
 - TypeScript compilation: `cd bridge && npx tsc --noEmit` (no lint config in the repo).
 - No dedicated linter or test suite is configured in this repo.
-- SQLite databases are auto-created at `/tmp/whatsapp-assistant-db/` on first server startup.
+- SQLite databases are auto-created at `/tmp/whatsapp-mcp-db/` on first server startup.

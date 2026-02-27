@@ -2,7 +2,7 @@
 # WhatsApp MCP — Installer for macOS
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-assistant/main/installer/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-mcp/main/installer/install.sh)
 #
 # Non-interactive:
 #   NEBIUS_API_KEY=xxx bash <(curl -fsSL ...)
@@ -14,7 +14,7 @@ APP_DIR="$WA_HOME/app"
 VENV_DIR="$WA_HOME/venv"
 LOG_DIR="$WA_HOME/logs"
 RUN_DIR="$WA_HOME/run"
-REPO_URL="https://github.com/kalki-kgp/whatsapp-assistant.git"
+REPO_URL="https://github.com/kalki-kgp/whatsapp-mcp.git"
 BIN_LINK="/usr/local/bin/wa"
 
 # Colors

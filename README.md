@@ -14,7 +14,7 @@ An AI-powered MCP (Model Context Protocol) layer for WhatsApp on macOS. Gives an
 ## Install
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-assistant/main/installer/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-mcp/main/installer/install.sh)
 ```
 
 The installer will:
@@ -27,7 +27,7 @@ The installer will:
 
 **Non-interactive install:**
 ```bash
-NEBIUS_API_KEY=your-key-here bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-assistant/main/installer/install.sh)
+NEBIUS_API_KEY=your-key-here bash <(curl -fsSL https://raw.githubusercontent.com/kalki-kgp/whatsapp-mcp/main/installer/install.sh)
 ```
 
 ## Usage
@@ -127,6 +127,6 @@ Or manually:
 ```bash
 rm -f /usr/local/bin/wa
 rm -rf ~/.wa
-rm -rf /tmp/whatsapp-assistant-db
+rm -rf /tmp/whatsapp-mcp-db
 rm -f ~/Library/LaunchAgents/com.wa-assistant.*.plist
 ```

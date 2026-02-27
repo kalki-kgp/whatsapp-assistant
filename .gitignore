@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .env
 references/
-/tmp/whatsapp-assistant-db/
+/tmp/whatsapp-mcp-db/
 .DS_Store
 bridge/node_modules/
 bridge/auth_info/
