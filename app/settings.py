@@ -31,9 +31,10 @@ def get_settings() -> dict:
 
 
 def update_settings(partial: dict) -> dict:
-    """Partial update — merges with existing settings and writes to disk."""
+    """Partial update — merges with existing settings and writes to disk. Only known keys accepted."""
     current = get_settings()
-    current.update(partial)
+    filtered = {k: v for k, v in partial.items() if k in DEFAULTS}
+    current.update(filtered)
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(SETTINGS_FILE, "w") as f:
         json.dump(current, f, indent=2)

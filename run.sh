@@ -40,7 +40,7 @@ sleep 2
 
 # Start Python server in foreground
 echo "[run] Starting Python server on :3009..."
-python -m uvicorn app.main:app --host 0.0.0.0 --port 3009 --reload &
+python -m uvicorn app.main:app --host 127.0.0.1 --port 3009 --reload &
 PYTHON_PID=$!
 
 # Voice assistant (optional — run in separate terminal)

@@ -86,6 +86,8 @@ async def api_rename_conversation(conv_id: str, request: Request):
 # Chat endpoints (now backed by store)
 # ---------------------------------------------------------------------------
 
+MAX_MESSAGE_LENGTH = 10000
+
 @app.post("/api/chat")
 async def api_chat(request: Request):
     """Chat endpoint. Accepts {"message": str, "conversation_id": str?}"""
@@ -95,6 +97,8 @@ async def api_chat(request: Request):
 
     if not user_message:
         return {"error": "Empty message"}
+    if len(user_message) > MAX_MESSAGE_LENGTH:
+        return {"error": f"Message too long (max {MAX_MESSAGE_LENGTH} characters)"}
 
     if not conv_id or not store.conversation_exists(conv_id):
         conv_id = store.create_conversation(store.auto_title(user_message))
@@ -124,6 +128,8 @@ async def api_chat_stream(request: Request):
 
     if not user_message:
         return {"error": "Empty message"}
+    if len(user_message) > MAX_MESSAGE_LENGTH:
+        return {"error": f"Message too long (max {MAX_MESSAGE_LENGTH} characters)"}
 
     is_new = not conv_id or not store.conversation_exists(conv_id)
     if is_new:
@@ -246,27 +252,45 @@ async def api_tts_test(request: Request):
     voice = body.get("voice", "Samantha")
     speed = body.get("speed", 190)
     text = body.get("text", f"Hi, I'm {voice}. How can I help you today?")
+    import re
+    if not isinstance(voice, str) or not re.match(r'^[A-Za-z .\-()]+$', voice) or len(voice) > 64:
+        return {"status": "error", "message": "Invalid voice name"}
+    if not isinstance(speed, (int, float)) or not (50 <= int(speed) <= 500):
+        return {"status": "error", "message": "Speed must be between 50 and 500"}
+    if not isinstance(text, str) or len(text) > 500:
+        return {"status": "error", "message": "Text too long (max 500 characters)"}
     try:
         subprocess.Popen(
-            ["say", "-v", voice, "-r", str(speed), text],
+            ["say", "-v", voice, "-r", str(int(speed)), text],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         return {"status": "ok"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "TTS failed"}
 
 
 # ---------------------------------------------------------------------------
 # Voice event stream
 # ---------------------------------------------------------------------------
 
+VOICE_EVENT_TYPES = {"voice_user", "voice_assistant", "voice_tool_call", "voice_tool_result"}
+
 @app.post("/api/voice/event")
 async def api_voice_event(request: Request):
     global voice_event_id
     body = await request.json()
+    if not isinstance(body, dict) or body.get("type") not in VOICE_EVENT_TYPES:
+        return {"error": "Invalid event type"}
+    event = {"type": body["type"]}
+    if "text" in body and isinstance(body["text"], str):
+        event["text"] = body["text"][:MAX_MESSAGE_LENGTH]
+    if "name" in body and isinstance(body["name"], str):
+        event["name"] = body["name"][:100]
+    if "tool_calls" in body and isinstance(body["tool_calls"], list):
+        event["tool_calls"] = body["tool_calls"][:20]
     voice_event_id += 1
-    body["id"] = voice_event_id
-    voice_events.append(body)
+    event["id"] = voice_event_id
+    voice_events.append(event)
     if len(voice_events) > 200:
         del voice_events[:len(voice_events) - 200]
     return {"id": voice_event_id}
