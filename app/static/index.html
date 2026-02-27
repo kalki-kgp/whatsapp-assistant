@@ -969,7 +969,7 @@ function updBUI(){BD.className='bdot '+bs;BL.textContent=bLabels[bs]||bs;if(bs==
 function onBridgeClick(){if(bs==='connected')return;openQR();}
 function openQR(){qmo=true;document.getElementById('qr-overlay').classList.add('active');fetchQR();qpi=setInterval(fetchQR,3000);}
 function closeQR(e){if(e&&e.target!==document.getElementById('qr-overlay')&&!e.target.classList.contains('modal-btn'))return;qmo=false;document.getElementById('qr-overlay').classList.remove('active');clearInterval(qpi);qpi=null;}
-async function fetchQR(){const c=document.getElementById('qr-box');try{const r=await fetch('/api/bridge/qr');const d=await r.json();if(d.qr)c.innerHTML=`<img src="${d.qr}" alt="QR">`;else if(d.status==='connected'){c.innerHTML='<span class="qr-msg" style="color:var(--accent)">Connected!</span>';setTimeout(closeQR,1500);}else c.innerHTML='<span class="qr-msg">Waiting for QR...</span>';}catch{c.innerHTML='<span class="qr-msg">Bridge not reachable</span>';}}
+async function fetchQR(){const c=document.getElementById('qr-box');try{const r=await fetch('/api/bridge/qr');const d=await r.json();if(d.qr){if(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(d.qr)){const img=document.createElement('img');img.src=d.qr;img.alt='QR';c.innerHTML='';c.appendChild(img);}else{c.innerHTML='<span class="qr-msg">Invalid QR data</span>';}}else if(d.status==='connected'){c.innerHTML='<span class="qr-msg" style="color:var(--accent)">Connected!</span>';setTimeout(closeQR,1500);}else c.innerHTML='<span class="qr-msg">Waiting for QR...</span>';}catch{c.innerHTML='<span class="qr-msg">Bridge not reachable</span>';}}
 pollBS();bpi=setInterval(pollBS,10000);
 
 // ===== INCOMING MESSAGE NOTIFICATIONS =====
