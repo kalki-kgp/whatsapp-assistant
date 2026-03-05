@@ -167,11 +167,10 @@ async def api_refresh():
 
 @app.post("/api/rewrite")
 async def api_rewrite(request: Request):
-    """Rewrite a message with a different tone or translate it."""
+    """Rewrite a message with a different tone."""
     body = await request.json()
     text = body.get("text", "").strip()
     tone = body.get("tone", "formal")
-    language = body.get("language")
 
     if not text:
         return {"error": "Empty text"}
@@ -179,7 +178,7 @@ async def api_rewrite(request: Request):
         return {"error": "Text too long (max 2000 characters)"}
 
     try:
-        result = rewriter.rewrite(text, tone, language)
+        result = rewriter.rewrite(text, tone)
         return {"rewritten": result, "tone": tone}
     except Exception as e:
         logger.error(f"Rewrite failed: {e}")

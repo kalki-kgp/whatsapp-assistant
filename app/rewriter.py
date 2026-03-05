@@ -16,13 +16,11 @@ SYSTEM = (
 )
 
 
-def rewrite(text: str, tone: str, language: str | None = None) -> str:
-    """Rewrite text with a given tone or translate it."""
+def rewrite(text: str, tone: str) -> str:
+    """Rewrite text with a given tone."""
     client = OpenAI(base_url=NEBIUS_BASE_URL, api_key=NEBIUS_API_KEY)
 
-    if tone == "translate" and language:
-        instruction = f"Translate this message to {language}. Return only the translation."
-    elif tone in TONE_INSTRUCTIONS:
+    if tone in TONE_INSTRUCTIONS:
         instruction = TONE_INSTRUCTIONS[tone]
     else:
         instruction = f"Rewrite this message to sound more {tone}."
