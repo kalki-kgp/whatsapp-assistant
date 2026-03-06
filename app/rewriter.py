@@ -1,6 +1,7 @@
 from openai import OpenAI
 
-from app.config import NEBIUS_BASE_URL, NEBIUS_API_KEY, LLM_MODEL
+from app.config import DEFAULT_LLM_MODEL, NEBIUS_BASE_URL, NEBIUS_API_KEY
+from app.settings import get_setting
 
 TONE_INSTRUCTIONS = {
     "formal": "Rewrite in a professional, formal tone. Keep the same meaning.",
@@ -16,6 +17,11 @@ SYSTEM = (
 )
 
 
+def _get_model_name() -> str:
+    model = get_setting("llm_model")
+    return model if isinstance(model, str) and model.strip() else DEFAULT_LLM_MODEL
+
+
 def rewrite(text: str, tone: str) -> str:
     """Rewrite text with a given tone."""
     client = OpenAI(base_url=NEBIUS_BASE_URL, api_key=NEBIUS_API_KEY)
@@ -26,7 +32,7 @@ def rewrite(text: str, tone: str) -> str:
         instruction = f"Rewrite this message to sound more {tone}."
 
     response = client.chat.completions.create(
-        model=LLM_MODEL,
+        model=_get_model_name(),
         messages=[
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"{instruction}\n\nMessage: {text}"},

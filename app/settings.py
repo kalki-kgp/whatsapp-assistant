@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
 
-from app.config import SETTINGS_FILE
+from app.config import DEFAULT_LLM_MODEL, SETTINGS_FILE
 
 DEFAULTS = {
     "assistant_name": "",            # user-chosen name for the voice assistant
     "wake_word": "hey whatsapp",
     "stt_engine": "google",       # "google" | "apple" | "whisper"
+    "llm_model": DEFAULT_LLM_MODEL,
     "tts_voice": "Samantha",      # macOS voice name
     "tts_speed": 190,             # words per minute
     "auto_listen": True,          # re-listen after speaking response

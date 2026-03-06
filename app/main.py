@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from app.agent import chat, chat_sync
 from app.db import refresh_db
-from app.config import SERVER_PORT, BRIDGE_URL
+from app.config import BRIDGE_URL, NEBIUS_API_KEY, NEBIUS_BASE_URL, SERVER_PORT
 from app.scheduler import start_scheduler, list_scheduled
 from app.settings import get_settings, update_settings
 from app import store
@@ -37,6 +37,54 @@ async def health():
 
 
 _STATIC_DIR = Path(__file__).parent / "static"
+
+
+async def fetch_nebius_models() -> dict:
+    """Fetch the currently available Nebius model IDs."""
+    if not NEBIUS_API_KEY:
+        return {
+            "models": [],
+            "error": "NEBIUS_API_KEY is not configured",
+        }
+
+    url = f"{NEBIUS_BASE_URL.rstrip('/')}/models"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {NEBIUS_API_KEY}"},
+                timeout=15,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.error("Nebius models request failed: %s", exc)
+        return {
+            "models": [],
+            "error": f"Nebius returned {exc.response.status_code}",
+        }
+    except Exception as exc:
+        logger.error("Failed to fetch Nebius models: %s", exc)
+        return {
+            "models": [],
+            "error": "Failed to fetch models from Nebius",
+        }
+
+    payload = response.json()
+    models = []
+    for item in payload.get("data", []):
+        model_id = item.get("id")
+        if not model_id:
+            continue
+        models.append(
+            {
+                "id": model_id,
+                "owned_by": item.get("owned_by", ""),
+                "created": item.get("created"),
+            }
+        )
+
+    models.sort(key=lambda item: item["id"].lower())
+    return {"models": models}
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -111,7 +159,10 @@ async def api_chat(request: Request):
 
     store.save_messages(conv_id, result.get("persist_messages", []))
     if result["response"]:
-        store.save_message(conv_id, {"role": "assistant", "content": result["response"]})
+        message = {"role": "assistant", "content": result["response"]}
+        if result.get("response_model"):
+            message["model"] = result["response_model"]
+        store.save_message(conv_id, message)
 
     return {
         "conversation_id": conv_id,
@@ -142,6 +193,7 @@ async def api_chat_stream(request: Request):
     def generate():
         yield f"data: {json.dumps({'type': 'conv_id', 'conversation_id': conv_id, 'is_new': is_new})}\n\n"
         final_content = ""
+        final_model = None
 
         for event in chat(history):
             if event["type"] == "persist":
@@ -150,9 +202,13 @@ async def api_chat_stream(request: Request):
                 yield f"data: {json.dumps(event)}\n\n"
                 if event["type"] == "message":
                     final_content = event["content"]
+                    final_model = event.get("model")
 
         if final_content:
-            store.save_message(conv_id, {"role": "assistant", "content": final_content})
+            message = {"role": "assistant", "content": final_content}
+            if final_model:
+                message["model"] = final_model
+            store.save_message(conv_id, message)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -245,6 +301,11 @@ async def api_put_settings(request: Request):
     body = await request.json()
     updated = update_settings(body)
     return updated
+
+
+@app.get("/api/llm-models")
+async def api_llm_models():
+    return await fetch_nebius_models()
 
 
 @app.get("/api/tts-voices")

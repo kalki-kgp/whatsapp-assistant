@@ -32,6 +32,7 @@ def init_db():
                 conversation_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT,
+                metadata TEXT,
                 tool_calls TEXT,
                 tool_call_id TEXT,
                 created_at TEXT NOT NULL,
@@ -40,6 +41,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_messages_conv
                 ON messages(conversation_id);
         """)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(messages)").fetchall()}
+        if "metadata" not in columns:
+            conn.execute("ALTER TABLE messages ADD COLUMN metadata TEXT")
 
 
 def _now():
@@ -86,7 +90,7 @@ def get_messages(conversation_id: str) -> list[dict]:
     """Get all messages for a conversation in OpenAI API format."""
     with _conn() as conn:
         rows = conn.execute(
-            "SELECT role, content, tool_calls, tool_call_id FROM messages "
+            "SELECT role, content, metadata, tool_calls, tool_call_id FROM messages "
             "WHERE conversation_id = ? ORDER BY id",
             (conversation_id,),
         ).fetchall()
@@ -94,6 +98,11 @@ def get_messages(conversation_id: str) -> list[dict]:
     messages = []
     for r in rows:
         msg: dict = {"role": r["role"], "content": r["content"]}
+        if r["metadata"]:
+            try:
+                msg.update(json.loads(r["metadata"]))
+            except json.JSONDecodeError:
+                pass
         if r["tool_calls"]:
             msg["tool_calls"] = json.loads(r["tool_calls"])
         if r["tool_call_id"]:
@@ -113,6 +122,11 @@ def save_message(conversation_id: str, message: dict):
     now = _now()
     role = message.get("role", "")
     content = message.get("content")
+    metadata = {
+        k: v
+        for k, v in message.items()
+        if k not in {"role", "content", "tool_calls", "tool_call_id"}
+    }
     tool_calls = (
         json.dumps(message["tool_calls"])
         if message.get("tool_calls")
@@ -122,9 +136,17 @@ def save_message(conversation_id: str, message: dict):
 
     with _conn() as conn:
         conn.execute(
-            "INSERT INTO messages (conversation_id, role, content, tool_calls, tool_call_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (conversation_id, role, content, tool_calls, tool_call_id, now),
+            "INSERT INTO messages (conversation_id, role, content, metadata, tool_calls, tool_call_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                conversation_id,
+                role,
+                content,
+                json.dumps(metadata) if metadata else None,
+                tool_calls,
+                tool_call_id,
+                now,
+            ),
         )
         conn.execute(
             "UPDATE conversations SET updated_at = ? WHERE id = ?",

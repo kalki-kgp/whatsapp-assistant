@@ -257,6 +257,8 @@
   .s-toggle.on::after { transform: translateX(20px); }
   .s-voice-row { display: flex; gap: 8px; align-items: stretch; }
   .s-voice-row select { flex: 1; }
+  .s-inline-row { display: flex; gap: 8px; align-items: stretch; }
+  .s-inline-row select { flex: 1; min-width: 0; }
   .s-test-btn {
     background: var(--accent-dim); border: 1px solid var(--accent);
     color: var(--accent); border-radius: 8px; padding: 0 14px;
@@ -266,6 +268,10 @@
   }
   .s-test-btn:hover { background: var(--accent); color: var(--bg-deep); }
   .s-test-btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .s-hint {
+    margin-top: 8px; font-size: 12px; color: var(--text-2); line-height: 1.5;
+  }
+  .s-hint.error { color: #ff8a80; }
   .s-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
   .s-actions button {
     padding: 10px 24px; border-radius: 24px; font-size: 13px;
@@ -642,7 +648,7 @@
       <button class="active" data-view="user" onclick="setView('user')">Chat</button>
       <button data-view="dev" onclick="setView('dev')">Dev</button>
     </div>
-    <button class="hbtn" onclick="openSettings()" title="Voice settings">
+    <button class="hbtn" onclick="openSettings()" title="Assistant settings">
       <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.611 3.611 0 0112 15.6z"/></svg>
     </button>
     <button class="hbtn" onclick="fetch('/api/refresh',{method:'POST'})" title="Refresh data">
@@ -673,7 +679,7 @@
   <div class="settings-modal" onclick="event.stopPropagation()">
     <h3>
       <svg viewBox="0 0 24 24"><path d="M12 3a1 1 0 00-1 1v.28c-1.18.28-2.24.84-3.1 1.62l-.24-.14a1 1 0 00-1.37.37l-1 1.73a1 1 0 00.37 1.37l.24.14A7.06 7.06 0 005.5 10H5a1 1 0 00-1 1v2a1 1 0 001 1h.5c.1.7.3 1.37.6 1.99l-.25.14a1 1 0 00-.36 1.37l1 1.73a1 1 0 001.37.36l.24-.14c.86.78 1.92 1.34 3.1 1.62V21a1 1 0 001 1h2a1 1 0 001-1v-.28c1.18-.28 2.24-.84 3.1-1.62l.24.14a1 1 0 001.37-.36l1-1.73a1 1 0 00-.37-1.37l-.24-.14c.3-.62.5-1.29.6-1.99h.5a1 1 0 001-1v-2a1 1 0 00-1-1h-.5a7.06 7.06 0 00-.6-1.99l.25-.14a1 1 0 00.36-1.37l-1-1.73a1 1 0 00-1.37-.36l-.24.14A6.94 6.94 0 0013 4.28V4a1 1 0 00-1-1zm0 6a3 3 0 110 6 3 3 0 010-6z"/></svg>
-      Voice Settings
+      Assistant Settings
     </h3>
     <div class="s-group">
       <label>Assistant Name</label>
@@ -690,6 +696,19 @@
         <option value="apple">Apple On-Device</option>
         <option value="whisper">Whisper (Local)</option>
       </select>
+    </div>
+    <div class="s-group">
+      <label>LLM Model</label>
+      <div class="s-inline-row">
+        <select id="s-llm-model">
+          <option value="">Loading models...</option>
+        </select>
+        <button class="s-test-btn" id="s-refresh-models" onclick="refreshModels()" title="Refresh Nebius models">
+          <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div class="s-hint" id="s-model-status">Fetching models from Nebius...</div>
     </div>
     <div class="s-group">
       <label>TTS Voice</label>
@@ -906,7 +925,7 @@ function renderHistory(messages){
     } else if(msg.role==='tool'){
       pendingTR.push(msg.content||'');
     } else if(msg.role==='assistant'){
-      addMsg('assistant',msg.content,pendingTC,pendingTR);
+      addMsg('assistant',msg.content,pendingTC,pendingTR,{model:msg.model});
       pendingTC=[];pendingTR=[];
     }
   }
@@ -971,16 +990,21 @@ function addDS(){
     s.innerHTML='<span>TODAY</span>';M.appendChild(s);
   }
 }
-function addMsg(role,content,tc,tr){
+function addMsg(role,content,tc,tr,meta={}){
   const w=document.getElementById('welcome-screen');if(w)w.remove();addDS();
   const d=document.createElement('div');d.className=`msg ${role}`;
   const c=document.createElement('div');c.className='msg-content';c.innerHTML=renderMD(content);d.appendChild(c);
-  if(role==='assistant'&&tc&&tc.length>0){
+  const hasTools = tc && tc.length > 0;
+  const hasModel = !!meta.model;
+  if(role==='assistant' && (hasTools || hasModel)){
     const tp=document.createElement('div');tp.className='dev-tool-panel';
     tp.style.display=currentView==='dev'?'block':'none';
     const sm=document.createElement('div');sm.className='dev-tool-summary';
-    sm.innerHTML=`<span class="tcount">${tc.length}</span> tool${tc.length>1?'s':''} used`;tp.appendChild(sm);
-    tc.forEach((t,i)=>{
+    const summaryBits = [];
+    if (hasModel) summaryBits.push(`<span class="tcount">MODEL</span> ${esc(meta.model)}`);
+    summaryBits.push(`<span class="tcount">${hasTools ? tc.length : 0}</span> tool${hasTools && tc.length===1 ? '' : 's'} used`);
+    sm.innerHTML=summaryBits.join(' ');tp.appendChild(sm);
+    (tc || []).forEach((t,i)=>{
       const it=document.createElement('div');it.className='dev-tool-item';
       const h=document.createElement('div');h.className='dev-tool-header';
       h.innerHTML=`<span class="tbadge">TOOL</span><span class="tname">${esc(t.name)}</span><span class="tarrow">&#9654;</span>`;
@@ -1022,7 +1046,7 @@ async function sendMessage(){
   addMsg('user',t);addTyping();startSC();
   try{
     const r=await fetch('/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:t,conversation_id:conversationId})});
-    const rd=r.body.getReader(),dec=new TextDecoder();let buf='',tc=[],tr=[],fc='',ti=0;
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='',tc=[],tr=[],fc='',fm='',ti=0;
     while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
       const lines=buf.split('\n');buf=lines.pop();
       for(const l of lines){if(!l.startsWith('data: '))continue;const d=l.slice(6).trim();if(d==='[DONE]')continue;
@@ -1037,11 +1061,11 @@ async function sendMessage(){
             usd(currentView==='user'?rp('s'):`Using: ${ev.name}`);}
           else if(ev.type==='tool_result'){tr[ti]=ev.result||'';
             updTyping(currentView==='user'?rp('p'):`${ev.name} done`);}
-          else if(ev.type==='message'){fc=ev.content;if(currentView==='user')updTyping(rp('f'));}
+          else if(ev.type==='message'){fc=ev.content;fm=ev.model||'';if(currentView==='user')updTyping(rp('f'));}
           else if(ev.type==='error')fc=`Error: ${ev.content}`;
         }catch{}}
     }
-    rmTyping();stopSC();if(fc)addMsg('assistant',fc,tc,tr);
+    rmTyping();stopSC();if(fc)addMsg('assistant',fc,tc,tr,{model:fm});
     loadConversations();
   }catch(err){rmTyping();stopSC();addMsg('assistant',`Something went wrong: ${err.message}`);}
   sending=false;SB.disabled=false;setON();I.focus();
@@ -1111,8 +1135,135 @@ const sSpeed = document.getElementById('s-tts-speed');
 const sSpeedVal = document.getElementById('s-speed-val');
 const sFollowUp = document.getElementById('s-follow-up');
 const sFollowVal = document.getElementById('s-follow-val');
+const sLlmModel = document.getElementById('s-llm-model');
+const sModelStatus = document.getElementById('s-model-status');
+const sRefreshModels = document.getElementById('s-refresh-models');
+let cachedNebiusModels = [];
 sSpeed.addEventListener('input', () => { sSpeedVal.textContent = sSpeed.value; });
 sFollowUp.addEventListener('input', () => { sFollowVal.textContent = sFollowUp.value + 's'; });
+
+function setModelStatus(text, isError = false) {
+  sModelStatus.textContent = text;
+  sModelStatus.classList.toggle('error', isError);
+}
+
+function ensureSelectOption(selectEl, value, label) {
+  if (!value) return;
+  const exists = Array.from(selectEl.options).some(option => option.value === value);
+  if (exists) return;
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label || value;
+  selectEl.appendChild(option);
+}
+
+function setSinglePlaceholderOption(selectEl, label) {
+  selectEl.innerHTML = '';
+  const option = document.createElement('option');
+  option.value = '';
+  option.textContent = label;
+  selectEl.appendChild(option);
+  selectEl.value = '';
+}
+
+function populateModelSelect(selectedModel) {
+  sLlmModel.innerHTML = '';
+
+  if (cachedNebiusModels.length > 0) {
+    for (const model of cachedNebiusModels) {
+      const option = document.createElement('option');
+      option.value = model.id;
+      option.textContent = model.id;
+      sLlmModel.appendChild(option);
+    }
+
+    if (selectedModel) {
+      ensureSelectOption(sLlmModel, selectedModel, selectedModel);
+      sLlmModel.value = selectedModel;
+    } else {
+      sLlmModel.value = cachedNebiusModels[0].id;
+    }
+
+    setModelStatus(`Showing ${cachedNebiusModels.length} cached model${cachedNebiusModels.length === 1 ? '' : 's'}. Click refresh to update from Nebius.`);
+    return;
+  }
+
+  if (selectedModel) {
+    ensureSelectOption(sLlmModel, selectedModel, selectedModel);
+    sLlmModel.value = selectedModel;
+    setModelStatus('Showing saved model. Click refresh to load the latest Nebius models.');
+    return;
+  }
+
+  setSinglePlaceholderOption(sLlmModel, 'Click refresh to load models');
+  setModelStatus('Click refresh to load the latest Nebius models.');
+}
+
+async function loadTTSVoices(selectedVoice) {
+  const vr = await fetch('/api/tts-voices');
+  const vd = await vr.json();
+  const sel = document.getElementById('s-tts-voice');
+  sel.innerHTML = '';
+
+  if (vd.voices && vd.voices.length > 0) {
+    for (const v of vd.voices) {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = `${v.name} (${v.lang})`;
+      sel.appendChild(o);
+    }
+  } else {
+    ensureSelectOption(sel, selectedVoice || 'Samantha', selectedVoice || 'Samantha');
+  }
+
+  sel.value = selectedVoice || 'Samantha';
+}
+
+async function loadNebiusModels(selectedModel) {
+  const currentValue = selectedModel || sLlmModel.value;
+  sRefreshModels.disabled = true;
+  sLlmModel.disabled = true;
+  setModelStatus('Fetching models from Nebius...');
+
+  try {
+    const r = await fetch('/api/llm-models');
+    const d = await r.json();
+    const models = Array.isArray(d.models) ? d.models : [];
+    cachedNebiusModels = models;
+
+    sLlmModel.innerHTML = '';
+    populateModelSelect(currentValue);
+
+    if (models.length === 0) {
+      if (currentValue) {
+        ensureSelectOption(sLlmModel, currentValue, currentValue);
+        sLlmModel.value = currentValue;
+      } else {
+        setSinglePlaceholderOption(sLlmModel, 'No models available');
+      }
+      setModelStatus(d.error || 'No models returned by Nebius.', true);
+    } else {
+      setModelStatus(`Loaded ${models.length} model${models.length === 1 ? '' : 's'} from Nebius.`);
+    }
+  } catch (e) {
+    if (currentValue) {
+      sLlmModel.innerHTML = '';
+      ensureSelectOption(sLlmModel, currentValue, currentValue);
+      sLlmModel.value = currentValue;
+    } else {
+      setSinglePlaceholderOption(sLlmModel, 'Unable to load models');
+    }
+    setModelStatus('Failed to refresh models from Nebius.', true);
+    console.error('Failed to load LLM models', e);
+  } finally {
+    sRefreshModels.disabled = false;
+    sLlmModel.disabled = false;
+  }
+}
+
+async function refreshModels() {
+  await loadNebiusModels(sLlmModel.value);
+}
 
 async function openSettings(){
   document.getElementById('settings-overlay').classList.add('active');
@@ -1122,6 +1273,7 @@ async function openSettings(){
     document.getElementById('s-assistant-name').value = s.assistant_name || '';
     document.getElementById('s-wake-word').value = s.wake_word || 'hey whatsapp';
     document.getElementById('s-stt-engine').value = s.stt_engine || 'google';
+    populateModelSelect(s.llm_model || '');
     sSpeed.value = s.tts_speed || 190;
     sSpeedVal.textContent = sSpeed.value;
     sFollowUp.value = s.follow_up_timeout || 3;
@@ -1130,19 +1282,7 @@ async function openSettings(){
     al.classList.toggle('on', s.auto_listen !== false);
     const sf = document.getElementById('s-sound-feedback');
     sf.classList.toggle('on', s.sound_feedback !== false);
-    const vr = await fetch('/api/tts-voices');
-    const vd = await vr.json();
-    const sel = document.getElementById('s-tts-voice');
-    if (vd.voices && vd.voices.length > 0) {
-      sel.innerHTML = '';
-      for (const v of vd.voices) {
-        const o = document.createElement('option');
-        o.value = v.name;
-        o.textContent = `${v.name} (${v.lang})`;
-        sel.appendChild(o);
-      }
-    }
-    sel.value = s.tts_voice || 'Samantha';
+    await loadTTSVoices(s.tts_voice || 'Samantha');
   } catch(e) { console.error('Failed to load settings', e); }
 }
 
@@ -1167,6 +1307,7 @@ async function saveSettings(){
     assistant_name: document.getElementById('s-assistant-name').value.trim(),
     wake_word: document.getElementById('s-wake-word').value.trim() || 'hey whatsapp',
     stt_engine: document.getElementById('s-stt-engine').value,
+    llm_model: sLlmModel.value,
     tts_voice: document.getElementById('s-tts-voice').value,
     tts_speed: parseInt(sSpeed.value),
     follow_up_timeout: parseInt(sFollowUp.value),

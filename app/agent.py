@@ -5,7 +5,8 @@ from typing import Generator
 
 from openai import OpenAI
 
-from app.config import NEBIUS_BASE_URL, NEBIUS_API_KEY, LLM_MODEL
+from app.config import DEFAULT_LLM_MODEL, NEBIUS_BASE_URL, NEBIUS_API_KEY
+from app.settings import get_setting
 from app.tools import TOOL_DEFINITIONS, execute_tool
 from app.db import refresh_db
 
@@ -133,6 +134,17 @@ def _get_client() -> OpenAI:
     return OpenAI(base_url=NEBIUS_BASE_URL, api_key=NEBIUS_API_KEY)
 
 
+def _get_model_name() -> str:
+    model = get_setting("llm_model")
+    return model if isinstance(model, str) and model.strip() else DEFAULT_LLM_MODEL
+
+
+def _api_message(msg: dict) -> dict:
+    """Strip persisted UI metadata before sending messages to the LLM API."""
+    allowed_keys = {"role", "content", "tool_calls", "tool_call_id"}
+    return {key: value for key, value in msg.items() if key in allowed_keys}
+
+
 def _build_system_prompt() -> str:
     local_now = datetime.now().astimezone()
     tz_name = local_now.strftime("%Z")
@@ -180,13 +192,15 @@ def prepare_context(messages: list[dict]) -> list[dict]:
                 else:
                     result.append(msg)
             else:
-                result.append(msg)
+                result.append(_api_message(msg))
     return result
 
 
-def _clean_assistant_message(msg_dict: dict) -> dict:
+def _clean_assistant_message(msg_dict: dict, model_name: str | None = None) -> dict:
     """Strip model_dump() extras down to fields needed for persistence/replay."""
     cleaned: dict = {"role": "assistant", "content": msg_dict.get("content")}
+    if model_name:
+        cleaned["model"] = model_name
     if msg_dict.get("tool_calls"):
         cleaned["tool_calls"] = [
             {"id": tc["id"], "type": tc["type"], "function": tc["function"]}
@@ -211,9 +225,10 @@ def chat(messages: list[dict], conversation_id: str | None = None) -> Generator[
     full_messages = [{"role": "system", "content": _build_system_prompt()}] + managed
 
     for round_num in range(MAX_TOOL_ROUNDS):
+        requested_model = _get_model_name()
         try:
             response = client.chat.completions.create(
-                model=LLM_MODEL,
+                model=requested_model,
                 messages=full_messages,
                 tools=TOOL_DEFINITIONS,
                 tool_choice="auto",
@@ -224,12 +239,13 @@ def chat(messages: list[dict], conversation_id: str | None = None) -> Generator[
 
         choice = response.choices[0]
         message = choice.message
+        actual_model = getattr(response, "model", None) or requested_model
 
         if message.tool_calls:
             raw_msg = message.model_dump()
             full_messages.append(raw_msg)
 
-            cleaned = _clean_assistant_message(raw_msg)
+            cleaned = _clean_assistant_message(raw_msg, actual_model)
             yield {"type": "persist", "message": cleaned}
 
             for tool_call in message.tool_calls:
@@ -256,7 +272,7 @@ def chat(messages: list[dict], conversation_id: str | None = None) -> Generator[
             continue
 
         content = message.content or ""
-        yield {"type": "message", "content": content}
+        yield {"type": "message", "content": content, "model": actual_model}
         return
 
     yield {
@@ -273,6 +289,7 @@ def chat_sync(messages: list[dict]) -> dict:
     """
     tool_calls = []
     final_response = ""
+    response_model = None
     persist_messages = []
 
     for event in chat(messages):
@@ -287,11 +304,13 @@ def chat_sync(messages: list[dict]) -> dict:
                     break
         elif event["type"] == "message":
             final_response = event["content"]
+            response_model = event.get("model")
         elif event["type"] == "error":
             final_response = event["content"]
 
     return {
         "response": final_response,
+        "response_model": response_model,
         "tool_calls": tool_calls,
         "persist_messages": persist_messages,
     }
